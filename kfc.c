@@ -6,6 +6,8 @@
 #include "kfc.h"
 
 static int inited = 0;
+int thread_id = 0;
+
 
 /**
  * Initializes the kfc library.  Programs are required to call this function
@@ -50,7 +52,6 @@ kfc_create(tid_t *ptid, void *(*start_func)(void *), void *arg,
 	assert(inited);
 	ucontext_t contextID, line;
 	getcontext(&contextID);
-	getcontext(&line);
 
 	if(stack_base == NULL){
 		if(stack_size==0){ 
@@ -63,6 +64,7 @@ kfc_create(tid_t *ptid, void *(*start_func)(void *), void *arg,
 	
 
 	contextID.uc_link = &line;
+	ptid=thread_id++;
 	contextID.uc_stack.ss_sp=stack_base;
 	contextID.uc_stack.ss_size=stack_size;
 	makecontext(&contextID, (void (*)())start_func, 1, arg);
