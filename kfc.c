@@ -1,5 +1,7 @@
 #include <assert.h>
 #include <sys/types.h>
+#include <ucontext.h>
+#include <stdlib.h>
 
 #include "kfc.h"
 
@@ -46,6 +48,27 @@ kfc_create(tid_t *ptid, void *(*start_func)(void *), void *arg,
 		caddr_t stack_base, size_t stack_size)
 {
 	assert(inited);
+	ucontext_t contextID, line;
+	getcontext(&contextID);
+	getcontext(&line);
+
+	if(stack_base == NULL){
+		if(stack_size==0){ 
+			stack_base = malloc(KFC_DEF_STACK_SIZE);
+			stack_size = KFC_DEF_STACK_SIZE;
+		}
+		else
+			stack_base=malloc(stack_size);
+	}
+	
+
+	contextID.uc_link = &line;
+	contextID.uc_stack.ss_sp=stack_base;
+	contextID.uc_stack.ss_size=stack_size;
+	makecontext(&contextID, (void (*)())start_func, 1, arg);
+
+
+	swapcontext(&line, &contextID);
 
 	return 0;
 }
