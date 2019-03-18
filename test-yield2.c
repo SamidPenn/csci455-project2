@@ -5,35 +5,30 @@
 #include "test.h"
 #include "kfc.h"
 
-static int parent_first = -1;
-
 static void *
 thread2_main(void *arg)
 {
-	CHECKPOINT(parent_first ? 4 : 2);
+	CHECKPOINT(5);
 	kfc_yield();
 
-	CHECKPOINT(parent_first ? 7 : 5);
+	CHECKPOINT(8);
 	return NULL;
 }
 
 static void *
 thread_main(void *arg)
 {
-	if (parent_first < 0)
-		parent_first = 0;
-
-	CHECKPOINT(1);
+	CHECKPOINT(2);
 
 	THREAD(thread2_main);
 
-	CHECKPOINT(parent_first ? 2 : 4);
+	CHECKPOINT(3);
 	kfc_yield();
 
-	CHECKPOINT(parent_first ? 5 : 7);
+	CHECKPOINT(6);
 	kfc_yield();
 
-	CHECKPOINT(parent_first ? 8 : 9);
+	CHECKPOINT(9);
 	kfc_yield();
 
 	return NULL;
@@ -47,18 +42,14 @@ main(void)
 	CHECKPOINT(0);
 
 	THREAD(thread_main);
-	if (parent_first < 0) {
-		parent_first = 1;
-		kfc_yield();
-	}
 
-	CHECKPOINT(3);
+	CHECKPOINT(1);
 	kfc_yield();
 
-	CHECKPOINT(6);
+	CHECKPOINT(4);
 	kfc_yield();
 
-	CHECKPOINT(parent_first ? 9 : 8);
+	CHECKPOINT(7);
 	kfc_yield();
 
 	CHECKPOINT(10);

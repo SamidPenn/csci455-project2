@@ -73,21 +73,28 @@ changes from my repository using:
   functionality.
 
 - If you would like to use Valgrind to help catch problems early, you need to
-  inform it whenever you allocate memory that will be used as a stack;
-  otherwise, Valgrind will get a bit confused when you switch context.  The fix
-  is very straightforward:
+  inform it of any memory that will be used as a stack; otherwise, Valgrind
+  will get a bit confused when you switch context.  I've added Valgrind's
+  header file to this repository, and the fix is very straightforward:
 
-      #include <valgrind/valgrind.h>
-      // ... then later, when allocating stack memory:
+      #include "valgrind.h"
+      // Whenever you allocate stack memory...
       stackmem = malloc(len);
+      // ... add the following line to register it:
       VALGRIND_STACK_REGISTER(stackmem, stackmem + len);
 
+  (You can see another example in `test-create.c`, in that case for
+  statically-allocated stack memory.)
 
 ## Steps/tests
 
 Each step comes with a test program that should output "success!" when it is
 done.  Additional tests or updates to the existing ones will likely be added
 later.
+
+You can run all of the tests in order by using the `test` target from the
+Makefile (i.e.  `make test`).  The `vtest` target will run the same tests in
+Valgrind.  Each of these targets will stop at the first test which fails.
 
 Points for each step are given, with a total of 80.
 
@@ -102,6 +109,10 @@ you understand ucontext.)  Allocate space for the stack if none is provided,
 and pass the provided argument on to the thread function.  Note: yes, it will
 be necessary to type-cast a function pointer here, but don't make a habit of
 it!
+
+When the test succeeds, it will print the text `success!`.  If you do not see
+this message, then the process exited prior to successfully completing the
+test.
 
 Note: You will only be doing cooperative, many-to-one multithreading to start
 with (i.e. `kfc_init(1, 0)`), so you do not need to implement support for
@@ -143,6 +154,12 @@ If no other thread is ready, control will return to the caller.  If this does
 not end up being a particularly simple function, this would be a good time to
 think about refactoring or asking for a hint on simplifying your approach.
 
+#### test-yield2
+
+Speaking of simplifying code, update the `kfc_create` function so that new
+threads are not immediately activated but take their rightful place at the back
+of the line.
+
 ### test-exit (5pts)
 
 Implement the `kfc_exit` function, which should terminate the calling thread
@@ -150,6 +167,12 @@ and schedule the next thread in FCFS order.  Returning from the thread main
 function should be equivalent to calling `kfc_exit` and passing it the value
 returned by the function.  Again, this will end up being a simple function if
 your design is in good shape; if not, ask for some direction.
+
+If `kfc_exit` is called from the process's initial main thread, the other
+threads should continue to run until the process exits explicitly with a call
+to `exit`, which the OS will handle for you.  (This is the same way that
+`pthread_exit` would behave for kernel threads, plus it's the easiest approach
+to implement.)
 
 ### test-join (5pts)
 
@@ -161,7 +184,7 @@ possible to join a thread once.  If the specified thread already has another
 thread waiting to join it, `kfc_join` should return an error.  Don't worry
 about deadlock.
 
-### test-sem (15pts)
+### test-sem\* (15pts)
 
 Implement semaphores.  These should be blocking semaphores that behave like the
 implementation given in the textbook.  Note, however, that if a wait operation

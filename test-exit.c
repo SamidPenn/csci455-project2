@@ -8,7 +8,7 @@
 static void *
 thread2_main(void *arg)
 {
-	CHECKPOINT(2);
+	CHECKPOINT(5);
 	kfc_exit(NULL);
 
 	ASSERT(0, "thread2 exit didn't");
@@ -18,11 +18,11 @@ thread2_main(void *arg)
 static void *
 thread_main(void *arg)
 {
-	CHECKPOINT(1);
+	CHECKPOINT(2);
 
 	THREAD(thread2_main);
 
-	CHECKPOINT(4);
+	CHECKPOINT(3);
 	kfc_exit(NULL);
 
 	ASSERT(0, "thread exit didn't");
@@ -38,10 +38,10 @@ main(void)
 
 	THREAD(thread_main);
 
-	CHECKPOINT(3);
+	CHECKPOINT(1);
 	kfc_yield();
 
-	CHECKPOINT(5);
+	CHECKPOINT(4);
 	kfc_yield();
 
 	CHECKPOINT(6);
