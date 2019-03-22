@@ -47,6 +47,7 @@ main(void)
 	INIT(1, 0);
 
 	m_self = kfc_self();
+	DPRINTF("m_self: %d\n", m_self);
 	CHECKPOINT(0);
 
 	tid_t tid = THREAD(thread_main);

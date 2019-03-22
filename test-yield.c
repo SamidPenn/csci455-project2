@@ -11,9 +11,14 @@ static void *
 thread2_main(void *arg)
 {
 	CHECKPOINT(parent_first ? 4 : 2);
+
+	DPRINTF("hit Checkpoint 2 in thread_main2\n");
 	kfc_yield();
 
+	DPRINTF("about to hit Checkpoint 5 in thread_main2\n");
 	CHECKPOINT(parent_first ? 7 : 5);
+
+	DPRINTF("hit Checkpoint 5 in thread_main2\n");
 	return NULL;
 }
 
@@ -25,9 +30,12 @@ thread_main(void *arg)
 
 	CHECKPOINT(1);
 
+	DPRINTF("hit Checkpoint 1 in thread_main\n");
 	THREAD(thread2_main);
 
 	CHECKPOINT(parent_first ? 2 : 4);
+	
+	DPRINTF("hit Checkpoint 2 in thread_main\n");
 	kfc_yield();
 
 	CHECKPOINT(parent_first ? 5 : 7);
@@ -45,7 +53,7 @@ main(void)
 	INIT(1, 0);
 
 	CHECKPOINT(0);
-
+	DPRINTF("hit Checkpoint 0 in main\n");
 	THREAD(thread_main);
 	if (parent_first < 0) {
 		parent_first = 1;
@@ -53,6 +61,8 @@ main(void)
 	}
 
 	CHECKPOINT(3);
+	DPRINTF("hit Checkpoint 3 in main- about to yield\n");
+	
 	kfc_yield();
 
 	CHECKPOINT(6);

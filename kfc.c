@@ -3,10 +3,30 @@
 #include <ucontext.h>
 #include <stdlib.h>
 
+
+#include "queue.h"
+
+
 #include "kfc.h"
 
 static int inited = 0;
-int thread_id = 0;
+
+
+struct tcb
+{
+	int used;
+	tid_t tid;
+	ucontext_t tcont;
+};
+
+ucontext_t jump;
+
+struct tcb TCBs[KFC_MAX_THREADS];
+
+struct tcb *current; 
+
+queue_t fcfs;
+
 
 
 /**
@@ -23,7 +43,17 @@ int
 kfc_init(int kthreads, int quantum_us)
 {
 	assert(!inited);
+	TCBs[0].tid=0;	
+	TCBs[0].used=1;	
+	current = &TCBs[0];
+ 	queue_init(&fcfs);
+	getcontext(&jump);
 
+	jump.uc_stack.ss_sp=malloc(KFC_DEF_STACK_SIZE);
+	jump.uc_stack.ss_size=KFC_DEF_STACK_SIZE;
+
+	makecontext(&jump, kfc_context_switch, 0);
+	
 	inited = 1;
 	return 0;
 }
@@ -69,8 +99,10 @@ kfc_create(tid_t *ptid, void *(*start_func)(void *), void *arg,
 		caddr_t stack_base, size_t stack_size)
 {
 	assert(inited);
-	ucontext_t contextID, line;
+	ucontext_t contextID;
 	getcontext(&contextID);
+	struct tcb *oldthread;
+	
 
 	if(stack_base == NULL){
 		if(stack_size==0){ 
@@ -82,16 +114,42 @@ kfc_create(tid_t *ptid, void *(*start_func)(void *), void *arg,
 	}
 	
 
-	contextID.uc_link = &line;
-	ptid=thread_id++;
+	tid_t i;
+	for(i=0; i < KFC_MAX_THREADS; i++){
+		if(TCBs[i].used==0){ 
+			TCBs[i].tid = i;
+			TCBs[i].used = 1;
+			break;
+		}
+	}
+	*ptid = i;
 	contextID.uc_stack.ss_sp=stack_base;
 	contextID.uc_stack.ss_size=stack_size;
-	makecontext(&contextID, (void (*)())start_func, 1, arg);
+	
+	queue_enqueue(&fcfs, current);
+	contextID.uc_link= &jump;
+	TCBs[i].tcont = contextID;
+	
+	oldthread=current;
+	
+	current = &TCBs[i];
+	
+	makecontext(&current->tcont, (void (*)())start_func, 1, arg);	
+	
+	
+	swapcontext(&oldthread->tcont, &current->tcont);
 
-
-	swapcontext(&line, &contextID);
-
+	
 	return 0;
+}
+
+void
+kfc_context_switch()
+{
+	current = queue_dequeue(&fcfs);
+	setcontext(&current->tcont);
+
+
 }
 
 void
@@ -115,10 +173,8 @@ kfc_join(tid_t tid, void **pret)
  */
 tid_t
 kfc_self(void)
-{
-	assert(inited);
-
-	return 0;
+{	
+	return current->tid;
 }
 
 /**
@@ -130,6 +186,10 @@ void
 kfc_yield(void)
 {
 	assert(inited);
+	queue_enqueue(&fcfs, current);
+	current= queue_dequeue(&fcfs);
+	setcontext(&current->tcont);
+
 }
 
 int
