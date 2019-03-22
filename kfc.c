@@ -186,9 +186,11 @@ void
 kfc_yield(void)
 {
 	assert(inited);
+	struct tcb *oldthread;
+	oldthread = current;
 	queue_enqueue(&fcfs, current);
 	current= queue_dequeue(&fcfs);
-	setcontext(&current->tcont);
+	swapcontext(&oldthread->tcont, &current->tcont);
 
 }
 
