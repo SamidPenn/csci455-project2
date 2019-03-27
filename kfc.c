@@ -17,6 +17,10 @@ struct tcb
 	int used;
 	tid_t tid;
 	ucontext_t tcont;
+	int hasret;
+	void *this_ret;
+	int waiting;
+	tid_t waitingfor;
 };
 
 ucontext_t jump;
@@ -24,9 +28,9 @@ ucontext_t jump;
 struct tcb TCBs[KFC_MAX_THREADS];
 
 struct tcb *current; 
+//struct tcb *waiting; 
 
 queue_t fcfs;
-
 
 
 /**
@@ -101,7 +105,7 @@ kfc_create(tid_t *ptid, void *(*start_func)(void *), void *arg,
 	assert(inited);
 	ucontext_t contextID;
 	getcontext(&contextID);
-	struct tcb *oldthread;
+	//struct tcb *oldthread;
 	
 
 	if(stack_base == NULL){
@@ -119,6 +123,8 @@ kfc_create(tid_t *ptid, void *(*start_func)(void *), void *arg,
 		if(TCBs[i].used==0){ 
 			TCBs[i].tid = i;
 			TCBs[i].used = 1;
+			TCBs[i].hasret=0;
+			TCBs[i].waiting=0;
 			break;
 		}
 	}
@@ -126,18 +132,20 @@ kfc_create(tid_t *ptid, void *(*start_func)(void *), void *arg,
 	contextID.uc_stack.ss_sp=stack_base;
 	contextID.uc_stack.ss_size=stack_size;
 	
-	queue_enqueue(&fcfs, current);
 	contextID.uc_link= &jump;
+	//queue_enqueue(&fcfs, current);
 	TCBs[i].tcont = contextID;
 	
-	oldthread=current;
+	//oldthread=current;
 	
-	current = &TCBs[i];
+//	current = &TCBs[i];
 	
-	makecontext(&current->tcont, (void (*)())start_func, 1, arg);	
+	makecontext(&TCBs[i].tcont, (void (*)())kfc_context_controller,
+										2, (void (*)())start_func, arg);	
+	queue_enqueue(&fcfs, &TCBs[i]);	
+	DPRINTF("Create:enqueing new thread: %d\n", i);
 	
-	
-	swapcontext(&oldthread->tcont, &current->tcont);
+//	swapcontext(&oldthread->tcont, &current->tcont);
 
 	
 	return 0;
@@ -146,9 +154,21 @@ kfc_create(tid_t *ptid, void *(*start_func)(void *), void *arg,
 void
 kfc_context_switch()
 {
+	assert(inited);
 	current = queue_dequeue(&fcfs);
+	DPRINTF("Thread just got dequeued: %d\n", current->tid);
 	setcontext(&current->tcont);
 
+
+}
+
+
+int
+kfc_context_controller(void *(*start_func)(void *), void *arg)
+{
+	kfc_exit(start_func(arg));	
+
+	return 0;
 
 }
 
@@ -156,13 +176,54 @@ void
 kfc_exit(void *ret)
 {
 	assert(inited);
+//	TCBs[current->tid].used = 0;
+	current->hasret=1;
+	current->this_ret=ret;
+
+	DPRINTF("Current thread exiting: %d\n ", current->tid);
+	for(int i =0; i < KFC_MAX_THREADS; i++){
+		
+		if(current->tid==TCBs[i].waitingfor && TCBs[i].waiting==1){
+			
+			DPRINTF("Current thread that is waiting for me: %d\n ", i);
+			current = &TCBs[i];
+
+		//	kfc_join(current->waitingfor, ret);	
+				
+			queue_enqueue(&fcfs, current);
+			
+			DPRINTF("Exit: enqueing waiting thread: %d\n", i);
+			break;
+		}
+
+
+	}
+//	current = queue_dequeue(&fcfs);
+	setcontext(&jump);
+
 }
 
 int
 kfc_join(tid_t tid, void **pret)
 {
 	assert(inited);
-
+	DPRINTF("join has been called, waiting on: %d\n", tid);
+	if(TCBs[tid].hasret==0){
+		DPRINTF("Join tid was not ready: %d\n", tid);
+		//DPRINTF("The current return value: %d\n", TCBs[tid].this_ret);
+		DPRINTF("-----------------\n");
+		current->waiting=1;
+		current->waitingfor = tid;
+		//current = queue_dequeue(&fcfs);
+		//swapcontext(&current->tcont);
+		swapcontext(&current->tcont, &jump);
+	}
+		
+	DPRINTF("the return value: %p\n", TCBs[tid].this_ret);
+	*pret=TCBs[tid].this_ret;
+	TCBs[tid].used=0;
+	current->waiting=0;
+//	queue_enqueue(&fcfs, current);
 	return 0;
 }
 
@@ -186,11 +247,13 @@ void
 kfc_yield(void)
 {
 	assert(inited);
-	struct tcb *oldthread;
-	oldthread = current;
+//	struct tcb *oldthread;
+//	oldthread = current;
 	queue_enqueue(&fcfs, current);
-	current= queue_dequeue(&fcfs);
-	swapcontext(&oldthread->tcont, &current->tcont);
+	DPRINTF("enqueing thread in yield tid: %d\n",current->tid);
+
+//	current= queue_dequeue(&fcfs);
+	swapcontext(&current->tcont, &jump);
 
 }
 
